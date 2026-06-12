@@ -42,17 +42,17 @@ async function callAI(apiKey, prompt, system = "") {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   PERSISTENZ (window.storage — überlebt Sessions)
+   PERSISTENZ (localStorage — überlebt Sessions)
 ══════════════════════════════════════════════════════════════ */
 const SKEY = "pylearn_state_v1";
 async function loadPersisted() {
   try {
-    const r = await window.storage.get(SKEY);
-    return r?.value ? JSON.parse(r.value) : {};
+    const v = localStorage.getItem(SKEY);
+    return v ? JSON.parse(v) : {};
   } catch { return {}; }
 }
 function persist(d) {
-  try { window.storage.set(SKEY, JSON.stringify(d)).catch(() => {}); } catch {}
+  try { localStorage.setItem(SKEY, JSON.stringify(d)); } catch {}
 }
 const today = () => new Date().toISOString().slice(0, 10);
 

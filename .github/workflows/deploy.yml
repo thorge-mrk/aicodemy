@@ -12,55 +12,67 @@ permissions:
 
 concurrency:
   group: "pages"
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        # HIER WAR DER FEHLER: Von 'actions/tools/node' zu 'actions/setup-node' korrigiert
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
-      - name: Fix window.storage for standard browsers
+      - name: Create package.json
         run: |
-          sed -i 's/window.storage/window.localStorage/g' src/App.jsx || sed -i 's/window.storage/window.localStorage/g' index.jsx || true
+          cat > package.json << 'EOF'
+          {
+            "name": "python-learn-ai",
+            "version": "1.0.0",
+            "type": "module",
+            "scripts": {
+              "build": "vite build",
+              "dev": "vite"
+            }
+          }
+          EOF
 
-      - name: Install Dependencies
+      - name: Create vite.config.js
         run: |
-          if [ -f package.json ]; then
-            npm ci || npm install
-          else
-            echo "Erstelle automatische Build-Umgebung..."
-            npm init -y
-            npm install react react-dom vite @vitejs/plugin-react
-          fi
+          cat > vite.config.js << 'EOF'
+          import { defineConfig } from 'vite'
+          import react from '@vitejs/plugin-react'
 
-      - name: Build App
-        run: |
-          if grep -q "build" package.json; then
-            npm run build
-          else
-            npx vite build --base=./
-          fi
+          export default defineConfig({
+            plugins: [react()],
+            base: '/aicodemy/'
+          })
+          EOF
+
+      - name: Install dependencies
+        run: npm install react react-dom vite @vitejs/plugin-react
+
+      - name: Build
+        run: npm run build
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      - name: Upload Artifact
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: |
-            ./dist
-            ./build
-            ./
+          path: ./dist
 
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
