@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import ReactDOM from "react-dom/client";
+import { LEVELS, getLevel, COURSES } from "./courses.js";
+import { runPython, loadPython } from "./pyrunner.js";
 
 /* ══════════════════════════════════════════════════════════════
    GEMINI API (Google AI Studio) — mit Modell-Fallback
@@ -58,22 +60,6 @@ function persist(d) {
 const today = () => new Date().toISOString().slice(0, 10);
 
 /* ══════════════════════════════════════════════════════════════
-   LEVELS
-══════════════════════════════════════════════════════════════ */
-const LEVELS = [
-  [0,"Neuling","⚪"],[100,"Anfänger","🟢"],[300,"Lernender","🔵"],
-  [600,"Coder","🟣"],[1000,"Entwickler","🟠"],[1500,"Senior","🔴"],[2500,"Python-Meister","⭐"]
-];
-function getLevel(xp) {
-  let cur = LEVELS[0];
-  for (const l of LEVELS) if (xp >= l[0]) cur = l;
-  const idx = LEVELS.indexOf(cur);
-  const nxt = LEVELS[Math.min(idx + 1, LEVELS.length - 1)];
-  const pct = idx >= LEVELS.length - 1 ? 100 : Math.min(100, ((xp - cur[0]) / (nxt[0] - cur[0])) * 100);
-  return { name: cur[1], icon: cur[2], nextXP: nxt[0], pct };
-}
-
-/* ══════════════════════════════════════════════════════════════
    PYTHON SYNTAX HIGHLIGHTER
 ══════════════════════════════════════════════════════════════ */
 const PY_KW = new Set(["def","class","if","elif","else","for","while","import","from","return","try","except","finally","with","as","and","or","not","in","is","True","False","None","break","continue","pass","lambda","yield","del","global","nonlocal","raise","assert"]);
@@ -118,796 +104,139 @@ function pyHL(code) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   KURSDATEN — 19 Lektionen + 3 Abschlusstests
+   GLOBALES STYLING — Animationen & Responsive
 ══════════════════════════════════════════════════════════════ */
-const COURSES = [
-  {
-    id:"beginner", emoji:"🟢", title:"Python Beginner", subtitle:"Die Werkzeuge",
-    color:"#22c55e", border:"#14532d", bg:"#071209",
-    lessons:[
-      {
-        id:"b1", num:1, title:"Deine erste Nachricht", sub:"print() & Kommentare",
-        story:"🚀 Du bist Astronaut auf dem Mars. Dein Terminal ist die einzige Verbindung zur Erde. Mit jedem print()-Befehl sendest du eine Nachricht ans Kontrollzentrum. Was schickst du als erstes?",
-        theory:`## Was ist Code?
-Code ist eine Serie von Anweisungen, die ein Computer Zeile für Zeile ausführt – von oben nach unten.
-
-## print()
-Der wichtigste Grundbefehl – gibt Daten auf dem Bildschirm aus:
-\`\`\`
-print("Hallo Welt!")    # Text in Anführungszeichen
-print(42)               # Zahlen direkt
-print("Alter:", 25)     # Mehrere Werte mit Komma
-\`\`\`
-
-## Kommentare mit #
-Alles nach # wird von Python **ignoriert**. Kommentare erklären deinen Code:
-\`\`\`
-# Das ist ein Kommentar
-print("Hallo")   # Inline-Kommentar
-\`\`\``,
-        example:`# Meine erste Python-Nachricht
-# Kommentare werden von Python ignoriert
-
-print("Hallo Erde!")
-print("Ich bin auf dem Mars angekommen!")
-print("Status: Alle Systeme normal 🚀")
-print("Tag:", 1, "Temperatur:", -60, "Grad")`,
-        task:"Schreibe ein Programm das mit print() ausgibt: deinen Namen, dein Alter, dein Lieblingsessen. Füge mindestens 2 Kommentare hinzu.",
-        xp:20, tags:["print()","#","Grundlagen"]
-      },
-      {
-        id:"b2", num:2, title:"Magische Daten-Boxen", sub:"Variablen & Datentypen",
-        story:"🧙 Du bist Zauberlehrling. Variablen sind deine magischen Boxen – jede hat einen Namen und du kannst Daten reinlegen. Python erkennt automatisch ob es Text, Zahl oder Wahrheitswert ist.",
-        theory:`## Variablen
-Daten im Speicher ablegen – Python erkennt den Typ automatisch:
-\`\`\`
-name = "Alex"       # String (Text) – in Anführungszeichen
-alter = 25          # Integer (ganze Zahl)
-groesse = 1.84      # Float (Kommazahl, Punkt statt Komma!)
-ist_cool = True     # Boolean (True oder False)
-\`\`\`
-
-## Variablen nutzen und ändern
-\`\`\`
-alter = 25
-print(alter)    # 25
-alter = 26      # Überschreiben geht jederzeit
-print(alter)    # 26
-\`\`\`
-**Regeln:** Keine Leerzeichen im Namen, nicht mit Zahl beginnen.`,
-        example:`name = "Luna"
-alter = 17
-groesse = 1.65
-lieblingsfilm = "Inception"
-
-print(name)
-print(alter)
-print(groesse)
-print(lieblingsfilm)
-
-# Variablen ändern
-alter = 18
-print("Jetzt:", alter)`,
-        task:"Erstelle Variablen für: deinen Namen, dein Alter, deine Stadt, deine Lieblingszahl (als Float). Gib alle 4 Variablen mit print() aus.",
-        xp:20, tags:["Variablen","String","Integer","Float","Boolean"]
-      },
-      {
-        id:"b3", num:3, title:"Der Taschenrechner", sub:"Operatoren & Rechnen",
-        story:"🔢 Als Raumfahrtingenieur musst du ständig rechnen – Treibstoff, Distanzen, Temperaturen. Python ist dein Supertaschenrechner, und Modulo (%) ist dein geheimes Werkzeug.",
-        theory:`## Rechenoperatoren
-\`\`\`
-10 + 3    # 13  Addition
-10 - 3    # 7   Subtraktion
-10 * 3    # 30  Multiplikation
-10 / 3    # 3.33 Division (immer Float!)
-10 // 3   # 3   Ganzzahldivision
-10 % 3    # 1   Modulo (Restwert!) ⭐
-10 ** 2   # 100 Potenz
-\`\`\`
-
-## Modulo – dein Superoperator
-\`\`\`
-17 % 2   # = 1 → ungerade
-16 % 2   # = 0 → gerade
-\`\`\`
-
-## Kurzformen
-\`\`\`
-x = 10
-x += 5   # x = 15
-x *= 2   # x = 30
-\`\`\``,
-        example:`preis = 100
-rabatt = 20
-
-endpreis = preis - rabatt
-mwst = endpreis * 0.19
-gesamt = endpreis + mwst
-
-print("Endpreis:", endpreis, "€")
-print("MwSt:", mwst, "€")
-print("Gesamt:", gesamt, "€")
-
-zahl = 17
-print("Gerade?", zahl % 2 == 0)`,
-        task:"Berechne: Du kaufst 3 Produkte (eigene Preise als Variablen). Berechne Gesamtpreis, 15% Rabatt darauf, und finalen Preis. Gib alles übersichtlich aus.",
-        xp:20, tags:["+","-","*","/","%","**","+="]
-      },
-      {
-        id:"b4", num:4, title:"Sprich mit dem User", sub:"Input & Type Casting",
-        story:"💬 Dein Programm wartet im Dunkeln – bis der Benutzer etwas eingibt. input() erweckt es zum Leben. Aber Vorsicht: alles kommt als Text zurück, auch Zahlen!",
-        theory:`## input()
-Wartet auf Eingabe des Benutzers:
-\`\`\`
-name = input("Wie heißt du? ")
-print("Hallo,", name)
-\`\`\`
-
-## ⚠️ Type Casting – sehr wichtig!
-input() gibt IMMER einen String zurück. Für Berechnungen umwandeln:
-\`\`\`
-alter = int(input("Dein Alter? "))       # → Integer
-groesse = float(input("Deine Größe? "))  # → Float
-
-# int() = ganze Zahl
-# float() = Kommazahl
-# str() = Text
-\`\`\``,
-        example:`name = input("Wie heißt du? ")
-alter = int(input("Wie alt bist du? "))
-
-geburtsjahr = 2025 - alter
-
-print("Hallo", name + "!")
-print("Geburtsjahr:", geburtsjahr)
-print("In 10 Jahren:", alter + 10, "Jahre alt")`,
-        task:"Frage den User nach: Namen, Alter, Geburtsstadt. Berechne Geburtsjahr und Alter im Jahr 2050. Gib alles personalisiert aus.",
-        xp:20, tags:["input()","int()","float()","str()","Type Casting"]
-      },
-      {
-        id:"b5", num:5, title:"Entscheidungen treffen", sub:"If / elif / else",
-        story:"🎮 Dein Programm muss selbst denken. Wie ein Türwächter: Wer darf rein? Wer nicht? If-Statements sind das Gehirn deines Codes – sie treffen Entscheidungen.",
-        theory:`## If-Statements
-\`\`\`
-if bedingung:
-    # code wenn True
-elif andere_bedingung:
-    # code wenn erste False, zweite True
-else:
-    # code wenn alles False
-\`\`\`
-
-## Vergleichsoperatoren
-\`\`\`
-==  gleich?      !=  ungleich?
->   größer?      <   kleiner?
->=  größer-gleich?   <=  kleiner-gleich?
-\`\`\`
-
-## Logische Operatoren
-\`\`\`
-if alter >= 18 and hat_ausweis:
-    print("Rein!")
-if regen or kalt:
-    print("Jacke an!")
-\`\`\``,
-        example:`punkte = int(input("Deine Punkte: "))
-
-if punkte >= 90:
-    print("Note: A - Ausgezeichnet! 🏆")
-elif punkte >= 80:
-    print("Note: B - Sehr gut!")
-elif punkte >= 70:
-    print("Note: C - Gut")
-elif punkte >= 60:
-    print("Note: D - Ausreichend")
-else:
-    print("Note: F - Nicht bestanden")`,
-        task:"Baue einen Passwort-Checker: Setze ein 'richtiges' Passwort als Variable. Frage den User danach. Reagiere auf: richtiges Passwort ('Willkommen!'), falsches Passwort ('Zugang verweigert!'), leeres Passwort ('Kein Passwort eingegeben!').",
-        xp:25, tags:["if","elif","else","and","or","==","!="]
-      },
-      {
-        id:"b6", num:6, title:"Text-Magie", sub:"String-Methoden & f-Strings",
-        story:"✨ Strings sind keine passiven Textblöcke – sie sind Objekte mit Superkräften. Du kannst sie transformieren, analysieren, zerschneiden. Und f-Strings sind das eleganteste Feature von Python.",
-        theory:`## String-Methoden
-\`\`\`
-text = "Hallo Python"
-text.upper()              # "HALLO PYTHON"
-text.lower()              # "hallo python"
-text.title()              # "Hallo Python"
-text.replace("o", "0")    # "Hall0 Pyth0n"
-len(text)                 # 12
-text.strip()              # Leerzeichen entfernen
-\`\`\`
-
-## f-Strings ⭐ Die moderne Methode
-\`\`\`
-name = "Max"
-alter = 20
-print(f"Hallo {name}! Du bist {alter} Jahre alt.")
-print(f"In 5 Jahren: {alter + 5}")
-\`\`\``,
-        example:`vorname = input("Vorname: ")
-nachname = input("Nachname: ")
-
-vollname = vorname + " " + nachname
-email = f"{vorname.lower()}.{nachname.lower()}@code.de"
-
-print(f"\\nHallo, {vollname.title()}!")
-print(f"E-Mail: {email}")
-print(f"Namenslänge: {len(vollname)} Zeichen")
-print(f"GROSSBUCHSTABEN: {vollname.upper()}")`,
-        task:"Name-Formatter: Input Vor- und Nachname. Output mit f-Strings: (1) GROSSBUCHSTABEN, (2) kleinbuchstaben, (3) generierte E-Mail vorname.nachname@python.de, (4) Gesamtlänge beider Namen zusammen.",
-        xp:25, tags:["f-Strings","upper()","lower()","len()","replace()"]
-      }
-    ],
-    finalTest:{
-      id:"bt", title:"Text-Adventure Generator",
-      desc:`Programmiere ein kleines Text-Rollenspiel!
-
-Das Programm muss:
-✓ Namen des Spielers per input() abfragen
-✓ Lebenspunkte mit Berechnung setzen
-✓ Mindestens 3 Entscheidungen mit if/elif/else anbieten
-✓ Auf falsche Eingaben reagieren
-✓ f-Strings für saubere Ausgaben nutzen
-
-Geprüft wird: input(), if/elif/else, Variablen, Rechnen, f-Strings`,
-      xp:100, diff:"Beginner"
+const GlobalStyle = () => (
+  <style>{`
+    @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+    @keyframes pop { 0% { transform:scale(0.6); opacity:0; } 70% { transform:scale(1.08); } 100% { transform:scale(1); opacity:1; } }
+    @keyframes glowPulse { 0%,100% { box-shadow:0 0 0 0 rgba(124,58,237,0.45); } 50% { box-shadow:0 0 0 7px rgba(124,58,237,0); } }
+    @keyframes bounceIn { 0% { transform:translateY(-8px); opacity:0; } 100% { transform:translateY(0); opacity:1; } }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .anim-fadeUp { animation: fadeUp 0.4s ease both; }
+    .anim-fadeIn { animation: fadeIn 0.3s ease both; }
+    .anim-pop { animation: pop 0.45s cubic-bezier(0.34,1.56,0.64,1) both; }
+    .anim-bounceIn { animation: bounceIn 0.35s ease both; }
+    .pulse-current { animation: glowPulse 2.2s ease-in-out infinite; }
+    .spin { animation: spin 1s linear infinite; display:inline-block; }
+    .hover-lift { transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease; }
+    .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.45); }
+    .hover-bright { transition: filter 0.15s ease, transform 0.12s ease; }
+    .hover-bright:hover { filter: brightness(1.15); }
+    .hover-bright:active { transform: scale(0.97); }
+    button { font-family: inherit; }
+    input, textarea { font-family: inherit; }
+    * { -webkit-tap-highlight-color: transparent; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: #2d2d50; border-radius: 99px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    @media (max-width: 600px) {
+      .grid-2 { grid-template-columns: 1fr !important; }
+      .pg-layout { flex-direction: column !important; }
+      .pg-chat { width: 100% !important; max-width: none !important; min-height: 280px; }
+      .hide-mobile { display: none !important; }
     }
-  },
-  {
-    id:"intermediate", emoji:"🟡", title:"Python Intermediate", subtitle:"Datenkontrolle",
-    color:"#eab308", border:"#713f12", bg:"#120e00",
-    lessons:[
-      {
-        id:"i1", num:7, title:"Die unermüdliche Maschine", sub:"While-Schleifen",
-        story:"⚙️ Du programmierst einen Roboter, der nicht aufhört – bis du STOP sagst. While-Schleifen laufen endlos weiter, solange eine Bedingung wahr ist.",
-        theory:`## While-Schleife
-\`\`\`
-while bedingung:
-    # Wird wiederholt solange True
-\`\`\`
+  `}</style>
+);
 
-## Endlosschleife mit break
-\`\`\`
-while True:
-    eingabe = input("Befehl: ")
-    if eingabe == "stop":
-        break     # Schleife beenden
-    if eingabe == "skip":
-        continue  # Diese Runde überspringen
-    print("Du sagtest:", eingabe)
-\`\`\`
-**break** beendet die Schleife. **continue** springt zur nächsten Iteration.`,
-        example:`geheimzahl = 42
-versuche = 0
-
-while True:
-    tipp = int(input("Rate (1-100): "))
-    versuche += 1
-
-    if tipp < geheimzahl:
-        print("Zu klein! ⬆️")
-    elif tipp > geheimzahl:
-        print("Zu groß! ⬇️")
-    else:
-        print(f"Richtig! {versuche} Versuche 🎉")
-        break`,
-        task:"Baue einen Countdown: Frage nach einer positiven Startzahl. Zähle mit while runter bis 0. Verhindere negative Eingaben. Gib am Ende 'Starten! 🚀' aus.",
-        xp:25, tags:["while","break","continue","Schleife"]
-      },
-      {
-        id:"i2", num:8, title:"Die Schatzkiste", sub:"Listen (Lists)",
-        story:"🎒 Dein Rucksack kann viele Dinge tragen – in einer Reihenfolge. Genau so funktionieren Listen. Hinzufügen, löschen, sortieren, indexieren.",
-        theory:`## Listen erstellen
-\`\`\`
-früchte = ["Apfel", "Banane", "Cherry"]
-früchte.append("Mango")     # Hinzufügen
-früchte.remove("Banane")    # Löschen
-früchte.sort()              # Alphabetisch sortieren
-len(früchte)                # Anzahl der Elemente
-\`\`\`
-
-## Indexing
-\`\`\`
-früchte[0]   # Erstes Element (Index beginnt bei 0!)
-früchte[-1]  # Letztes Element
-früchte[1:3] # Elemente 1 und 2 (Slicing)
-\`\`\`
-
-## Prüfen
-\`\`\`
-"Apfel" in früchte   # True/False
-\`\`\``,
-        example:`einkaufsliste = []
-
-while True:
-    item = input("Item (oder 'fertig'): ")
-    if item == "fertig":
-        break
-    einkaufsliste.append(item)
-
-print("\\nDeine Liste:")
-einkaufsliste.sort()
-for i, item in enumerate(einkaufsliste):
-    print(f"{i+1}. {item}")
-print(f"Insgesamt: {len(einkaufsliste)} Items")`,
-        task:"Top-5 Lieblingsfilme: Lass User 5 Filme eingeben. Speichere in Liste. Sortiere alphabetisch. Zeige nummeriert. Lass dann einen Film per Eingabe löschen.",
-        xp:25, tags:["list","append()","remove()","sort()","len()"]
-      },
-      {
-        id:"i3", num:9, title:"Der Reiseführer", sub:"For-Schleifen & range()",
-        story:"🗺️ Du planst eine Weltreise und willst jeden Ort besuchen. Die For-Schleife ist dein Reiseplan – systematisch, jeden Stop, keinen vergessen.",
-        theory:`## For-Schleife über Liste
-\`\`\`
-städte = ["Berlin", "Paris", "Tokyo"]
-for stadt in städte:
-    print(f"Nächster Stopp: {stadt}")
-\`\`\`
-
-## range() für Zahlen
-\`\`\`
-for i in range(5):          # 0, 1, 2, 3, 4
-for i in range(1, 11):      # 1 bis 10
-for i in range(0, 10, 2):   # 0, 2, 4, 6, 8
-\`\`\`
-
-## enumerate für Index + Wert
-\`\`\`
-for i, item in enumerate(liste):
-    print(f"{i}: {item}")
-\`\`\``,
-        example:`noten = [2, 1, 3, 2, 1, 4]
-summe = 0
-beste = noten[0]
-
-for note in noten:
-    summe += note
-    if note < beste:
-        beste = note
-
-durchschnitt = summe / len(noten)
-print(f"Durchschnitt: {durchschnitt:.1f}")
-print(f"Beste Note: {beste}")`,
-        task:"Notenrechner: Liste mit 5 selbst gewählten Noten. Berechne mit for-Schleife: Durchschnitt, beste Note, schlechteste Note, Anzahl der Noten unter 3.",
-        xp:25, tags:["for","range()","enumerate()","in"]
-      },
-      {
-        id:"i4", num:10, title:"Das Telefonbuch", sub:"Dictionaries",
-        story:"📞 Ein Telefonbuch ordnet Namen Nummern zu. Dictionaries tun genau das – du suchst mit einem Schlüssel und bekommst den Wert. Perfekt für strukturierte Daten.",
-        theory:`## Dictionary erstellen
-\`\`\`
-person = {
-    "name": "Alex",
-    "alter": 25,
-    "stadt": "Berlin"
+/* ══════════════════════════════════════════════════════════════
+   OUTPUT-KONSOLE — zeigt echte Python-Ausgabe
+══════════════════════════════════════════════════════════════ */
+function OutputConsole({ output, error, running, status, onClear }) {
+  if (!running && !status && output === null && !error) return null;
+  return (
+    <div className="anim-fadeIn" style={{background:"#05050c",border:"1px solid #2d2d50",borderRadius:10,marginTop:10,overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 12px",background:"#0d0d1c",borderBottom:"1px solid #1e1e3a"}}>
+        <span style={{color:"#6b7280",fontSize:11,fontWeight:700,letterSpacing:0.5}}>
+          {running ? <><span className="spin">⏳</span> {status || "Führe aus..."}</> : "▸ KONSOLE"}
+        </span>
+        {onClear && !running && <button onClick={onClear} style={{background:"none",border:"none",color:"#4b5563",cursor:"pointer",fontSize:11}}>✕ leeren</button>}
+      </div>
+      <pre style={{margin:0,padding:"12px 14px",fontFamily:"'Fira Code',Consolas,monospace",fontSize:13,lineHeight:1.6,color:"#d4d4d4",whiteSpace:"pre-wrap",overflowWrap:"break-word",maxHeight:240,overflowY:"auto"}}>
+        {output || ""}
+        {error && <span style={{color:"#f87171"}}>{(output ? "\n" : "") + error}</span>}
+        {!running && !error && !output && <span style={{color:"#4b5563"}}>(keine Ausgabe)</span>}
+      </pre>
+    </div>
+  );
 }
-\`\`\`
 
-## Zugreifen und ändern
-\`\`\`
-person["name"]            # "Alex" lesen
-person["job"] = "Coder"   # Neu hinzufügen
-person["alter"] = 26      # Ändern
-del person["stadt"]       # Löschen
-"name" in person          # True/False prüfen
-\`\`\`
+/* Hook: Python-Code ausführen mit Konsolen-State */
+function usePyRunner() {
+  const [out, setOut] = useState(null);
+  const [err, setErr] = useState(null);
+  const [running, setRunning] = useState(false);
+  const [status, setStatus] = useState("");
 
-## Durchlaufen
-\`\`\`
-for key, value in person.items():
-    print(f"{key}: {value}")
-\`\`\``,
-        example:`kontakte = {}
+  const run = async (code) => {
+    if (running) return;
+    setRunning(true); setOut(""); setErr(null); setStatus("");
+    try {
+      const r = await runPython(code, { onStatus: setStatus });
+      setOut(r.output); setErr(r.error);
+    } catch (e) {
+      setErr(String(e.message || e));
+    } finally { setRunning(false); setStatus(""); }
+  };
+  const clear = () => { setOut(null); setErr(null); };
+  return { out, err, running, status, run, clear };
+}
 
-while True:
-    aktion = input("(a)dden (s)uchen (b)eenden: ")
-    if aktion == "b": break
-    elif aktion == "a":
-        name = input("Name: ")
-        nummer = input("Nummer: ")
-        kontakte[name] = nummer
-        print(f"✅ {name} gespeichert!")
-    elif aktion == "s":
-        name = input("Suchen: ")
-        if name in kontakte:
-            print(f"📞 {kontakte[name]}")
-        else:
-            print("❌ Nicht gefunden")`,
-        task:"Produkt-Inventar: Dict mit 5 Produkten (Name: Preis). Lass User Produkte suchen. Berechne Durchschnittspreis aller Produkte mit einer for-Schleife.",
-        xp:30, tags:["dict","key","value",".items()","in"]
-      },
-      {
-        id:"i5", num:11, title:"Spezial-Sammlungen", sub:"Tuples & Sets",
-        story:"🔒 Manchmal sind Daten heilig und dürfen nicht verändert werden. Manchmal brauchst du nur einzigartige Werte. Tuples und Sets lösen genau das.",
-        theory:`## Tuples – unveränderlich
-\`\`\`
-koordinaten = (52.5, 13.4)     # Kann nicht geändert werden!
-x, y = koordinaten              # Unpacking!
-wochentage = ("Mo","Di","Mi","Do","Fr")
-\`\`\`
+/* ══════════════════════════════════════════════════════════════
+   KI-HILFE-BUTTON (schwebend, unten rechts)
+══════════════════════════════════════════════════════════════ */
+function HelpFab({ apiKey, context }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [loading, setLoading] = useState(false);
 
-## Sets – keine Duplikate
-\`\`\`
-besucher = {"Alex", "Ben", "Alex", "Clara"}
-# → {"Alex", "Ben", "Clara"}  Duplikat weg!
+  const ask = async (question) => {
+    setLoading(true); setText("");
+    try {
+      const resp = await callAI(apiKey,
+        `${context}\n\nFrage des Schülers: ${question}\n\nAntworte hilfreich, kompakt (max 5 Sätze + ggf. ein Mini-Codebeispiel), auf Deutsch. Gib KEINE Komplettlösung der Aufgabe, sondern erkläre das Konzept.`);
+      setText(resp);
+    } catch (e) { setText(`Fehler: ${e.message}`); }
+    finally { setLoading(false); }
+  };
 
-set1 = {1, 2, 3}
-set2 = {2, 3, 4}
-set1 & set2   # Schnittmenge: {2, 3}
-set1 | set2   # Vereinigung: {1, 2, 3, 4}
-\`\`\``,
-        example:`# Tuple: GPS (unveränderlich)
-berlin = (52.52, 13.41)
-lat, lon = berlin
-print(f"Berlin: {lat}°N, {lon}°E")
-
-# Set: Einzigartige Besucher
-log = ["Alice","Bob","Alice","Charlie","Bob"]
-einzigartig = set(log)
-print(f"Besuche: {len(log)}")
-print(f"Unique: {len(einzigartig)}")`,
-        task:"Wort-Analyzer: Nimm einen Satz per input(). Speichere alle Wörter als Liste (text.split()). Konvertiere zu Set. Gib aus: Wörter total vs. einzigartige Wörter und welche Wörter doppelt waren.",
-        xp:25, tags:["tuple","set","immutable","Duplikate"]
-      },
-      {
-        id:"i6", num:12, title:"Baupläne für Code", sub:"Eigene Funktionen (def)",
-        story:"🏗️ Gute Programmierer wiederholen sich nie. Funktionen sind deine Baupläne – einmal schreiben, überall nutzen. Das ist der Kern von professionellem Code.",
-        theory:`## Funktionen definieren
-\`\`\`
-def begruessen(name, sprache="de"):
-    if sprache == "de":
-        return f"Hallo, {name}!"
-    return f"Hello, {name}!"
-
-# Aufrufen:
-print(begruessen("Alex"))
-print(begruessen("Alex", "en"))
-\`\`\`
-
-## return
-Gibt Wert zurück. Ohne return: None.
-\`\`\`
-def addieren(a, b):
-    return a + b
-
-summe = addieren(5, 3)  # 8
-\`\`\`
-Default-Werte für Parameter mit **=**.`,
-        example:`def ist_prim(n):
-    if n < 2: return False
-    for i in range(2, int(n**0.5)+1):
-        if n % i == 0: return False
-    return True
-
-def primzahlen_bis(limit):
-    return [x for x in range(2, limit+1) if ist_prim(x)]
-
-n = int(input("Primzahlen bis: "))
-primzahlen = primzahlen_bis(n)
-print(f"Primzahlen bis {n}: {primzahlen}")
-print(f"Anzahl: {len(primzahlen)}")`,
-        task:"Schreibe 3 Funktionen: (1) berechne_mwst(preis, satz=0.19) → gibt Nettopreis + MwSt aus, (2) celsius_zu_fahrenheit(grad) → Umrechnung, (3) ist_gerade(zahl) → True/False. Teste alle drei.",
-        xp:35, tags:["def","return","parameter","default"]
-      }
-    ],
-    finalTest:{
-      id:"it", title:"Das digitale Haushaltsbuch",
-      desc:`Baue ein Einnahmen/Ausgaben-System!
-
-Das Programm muss:
-✓ In einer Schleife laufen bis "beenden"
-✓ Einnahmen und Ausgaben speichern (Listen oder Dicts)
-✓ Einträge hinzufügen können
-✓ Eine eigene Funktion den Kontostand berechnen
-✓ Warnung ausgeben wenn im Minus
-
-Geprüft wird: while, for, Lists/Dicts, def, return`,
-      xp:150, diff:"Intermediate"
-    }
-  },
-  {
-    id:"pro", emoji:"🔴", title:"Python Profi", subtitle:"Struktur & Dateihandling",
-    color:"#ef4444", border:"#7f1d1d", bg:"#120505",
-    lessons:[
-      {
-        id:"p1", num:13, title:"Crash-sichere Programme", sub:"Try / Except",
-        story:"🛡️ Ein Programm das beim ersten Fehler abstürzt ist unbrauchbar. try/except ist deine Schutzrüstung – fange Fehler ab bevor sie alles zerstören.",
-        theory:`## Try / Except
-\`\`\`
-try:
-    zahl = int(input("Zahl: "))
-    print(10 / zahl)
-except ValueError:
-    print("Das ist keine Zahl!")
-except ZeroDivisionError:
-    print("Nicht durch 0 teilen!")
-except Exception as e:
-    print(f"Fehler: {e}")
-finally:
-    print("Wird IMMER ausgeführt")
-\`\`\`
-**ValueError** = falscher Typ. **ZeroDivisionError** = durch 0. **finally** läuft immer.`,
-        example:`def sichere_eingabe(prompt, typ=int):
-    while True:
-        try:
-            return typ(input(prompt))
-        except ValueError:
-            print("❌ Ungültige Eingabe!")
-
-alter = sichere_eingabe("Alter: ")
-groesse = sichere_eingabe("Größe: ", float)
-print(f"Alter: {alter}, Größe: {groesse}m")`,
-        task:"Sicherer Taschenrechner: Frage nach 2 Zahlen und Operation (+,-,*,/). Fange alle Fehler ab: keine Zahlen, Division durch 0, unbekannte Operation. Zeige immer eine sinnvolle Fehlermeldung.",
-        xp:30, tags:["try","except","finally","ValueError"]
-      },
-      {
-        id:"p2", num:14, title:"Daten überleben alles", sub:"File Handling",
-        story:"💾 Daten im RAM verschwinden wenn das Programm schließt. Files leben ewig. Lerne wie du Daten persistent speicherst und wieder lädst.",
-        theory:`## Dateien schreiben und lesen
-\`\`\`
-# Schreiben (überschreibt):
-with open("datei.txt", "w") as f:
-    f.write("Hallo\\n")
-
-# Anhängen:
-with open("datei.txt", "a") as f:
-    f.write("Neue Zeile\\n")
-
-# Lesen:
-with open("datei.txt", "r") as f:
-    inhalt = f.read()
-    zeilen = f.readlines()  # Liste
-\`\`\`
-Immer **with** verwenden – schließt die Datei automatisch!`,
-        example:`def speichern(text):
-    with open("notizen.txt", "a") as f:
-        f.write(text + "\\n")
-
-def lesen():
-    try:
-        with open("notizen.txt", "r") as f:
-            return f.readlines()
-    except FileNotFoundError:
-        return []
-
-while True:
-    cmd = input("(s)chreiben (l)esen (b)eenden: ")
-    if cmd == "b": break
-    elif cmd == "s": speichern(input("Text: "))
-    elif cmd == "l":
-        for z in lesen(): print(z.strip())`,
-        task:"Highscore-System: Speichere Name+Punkte in einer Textdatei. Beim Start alle bestehenden Scores laden und zeigen. Neuen Score hinzufügen. Besten Score hervorheben.",
-        xp:30, tags:["open()","write()","read()","with"]
-      },
-      {
-        id:"p3", num:15, title:"Die Sprache des Internets", sub:"JSON",
-        story:"🌐 JSON ist das universelle Datenformat. APIs, Apps, Datenbanken – alle reden JSON. Lerne es und du verstehst die Sprache der modernen Software.",
-        theory:`## JSON – Dictionaries als Datei
-\`\`\`
-import json
-
-# Dict → JSON-Datei speichern:
-daten = {"name": "Alex", "punkte": [10, 20]}
-with open("daten.json", "w") as f:
-    json.dump(daten, f, indent=2)
-
-# JSON-Datei → Dict laden:
-with open("daten.json", "r") as f:
-    geladen = json.load(f)
-
-print(geladen["name"])  # Alex
-\`\`\`
-**indent=2** macht die JSON-Datei lesbar für Menschen.`,
-        example:`import json
-
-DATEI = "nutzer.json"
-
-def laden():
-    try:
-        with open(DATEI) as f: return json.load(f)
-    except FileNotFoundError: return {}
-
-def speichern(d):
-    with open(DATEI, "w") as f: json.dump(d, f, indent=2)
-
-nutzer = laden()
-name = input("Name: ")
-punkte = int(input("Punkte: "))
-nutzer[name] = {"punkte": punkte}
-speichern(nutzer)
-print("✅ Gespeichert!")`,
-        task:"JSON-Kontaktmanager: Lade Kontakte aus contacts.json (falls vorhanden). Neue Kontakte hinzufügen (Name, Email, Telefon). Kontakt per Name suchen. Alle Änderungen zurück in JSON speichern.",
-        xp:35, tags:["json","json.dump()","json.load()","import"]
-      },
-      {
-        id:"p4", num:16, title:"Baupläne für Objekte", sub:"OOP – Klassen",
-        story:"🏭 Du bist kein Programmierer mehr – du bist Architekt. Klassen sind deine Baupläne, Objekte die erschaffenen Dinge. Das ist objektorientiertes Denken.",
-        theory:`## Klassen definieren
-\`\`\`
-class Auto:
-    def __init__(self, marke, ps):   # Konstruktor
-        self.marke = marke            # Attribut
-        self.ps = ps
-        self.km = 0
-
-    def fahren(self, kilometer):     # Methode
-        self.km += kilometer
-
-    def __str__(self):               # String-Darstellung
-        return f"{self.marke} ({self.km}km)"
-
-mein_auto = Auto("Tesla", 400)
-mein_auto.fahren(100)
-print(mein_auto)
-\`\`\``,
-        example:`class BankKonto:
-    def __init__(self, inhaber, start=0):
-        self.inhaber = inhaber
-        self.guthaben = start
-
-    def einzahlen(self, betrag):
-        self.guthaben += betrag
-        print(f"✅ +{betrag}€ → {self.guthaben}€")
-
-    def abheben(self, betrag):
-        if betrag > self.guthaben:
-            print("❌ Kein Guthaben")
-            return
-        self.guthaben -= betrag
-
-    def __str__(self):
-        return f"Konto {self.inhaber}: {self.guthaben}€"
-
-konto = BankKonto("Alex", 1000)
-konto.einzahlen(500)
-konto.abheben(200)
-print(konto)`,
-        task:"Student-Klasse: Attribute name, matrikel_nr, noten (Liste). Methoden: note_hinzufuegen(n), durchschnitt() → berechnet Durchschnitt, status() → 'Bestanden' oder 'Nicht bestanden' (Grenze 4.0). Erstelle 2 Studenten und teste alle Methoden.",
-        xp:40, tags:["class","__init__","self","Methoden","OOP"]
-      },
-      {
-        id:"p5", num:17, title:"Code vererben", sub:"OOP – Vererbung",
-        story:"👶 Kinder erben von Eltern. In Python erben Klassen von anderen Klassen. Schreibe einmal, nutze überall – das Grundprinzip der Wiederverwendung.",
-        theory:`## Vererbung
-\`\`\`
-class Tier:
-    def __init__(self, name):
-        self.name = name
-    def laut(self):
-        return "..."
-
-class Hund(Tier):           # erbt von Tier
-    def __init__(self, name, rasse):
-        super().__init__(name)  # Eltern-Konstruktor
-        self.rasse = rasse
-
-    def laut(self):         # Override!
-        return "Wuff! 🐕"
-
-fido = Hund("Fido", "Labrador")
-print(fido.laut())  # Wuff!
-\`\`\`
-**super()** ruft den Eltern-Konstruktor auf. **Override** = Methode überschreiben.`,
-        example:`class Fahrzeug:
-    def __init__(self, marke, speed):
-        self.marke = marke
-        self.max_speed = speed
-
-    def info(self):
-        return f"{self.marke} ({self.max_speed}km/h)"
-
-class ElektroAuto(Fahrzeug):
-    def __init__(self, marke, speed, reichweite):
-        super().__init__(marke, speed)
-        self.reichweite = reichweite
-
-    def info(self):
-        return f"{super().info()}, {self.reichweite}km 🔋"
-
-tesla = ElektroAuto("Tesla", 250, 600)
-print(tesla.info())`,
-        task:"Form-Hierarchie: Klasse Form mit flaeche() und umfang() (return 0). Unterklassen Rechteck(Form) und Kreis(Form) mit echten Berechnungen (import math für pi). 2 Objekte je Klasse testen.",
-        xp:40, tags:["Vererbung","super()","override","Polymorphismus"]
-      },
-      {
-        id:"p6", num:18, title:"Pythons Werkzeugkasten", sub:"Standard-Module",
-        story:"🎁 Python liefert hunderte fertige Werkzeuge mit. Du musst das Rad nicht neu erfinden – du musst nur wissen wo die Werkzeugkiste ist.",
-        theory:`## random – Zufallszahlen
-\`\`\`
-import random
-random.randint(1, 100)    # Zufallszahl 1-100
-random.choice(["A","B"])  # Zufälliges Element
-random.shuffle(liste)      # Liste mischen
-\`\`\`
-
-## datetime – Datum & Zeit
-\`\`\`
-import datetime
-heute = datetime.date.today()
-print(heute.strftime("%d.%m.%Y"))
-\`\`\`
-
-## math – Mathematik
-\`\`\`
-import math
-math.sqrt(16)    # 4.0
-math.pi          # 3.14159
-math.ceil(3.2)   # 4 (aufrunden)
-\`\`\``,
-        example:`import random
-import datetime
-import math
-
-# Würfel 10x
-wuerfe = [random.randint(1,6) for _ in range(10)]
-print(f"Würfe: {wuerfe}")
-print(f"Durchschnitt: {sum(wuerfe)/len(wuerfe):.2f}")
-
-# Datum
-heute = datetime.date.today()
-print(f"Heute: {heute.strftime('%d.%m.%Y')}")
-
-# Mathe
-print(f"Pi: {math.pi:.4f}")
-print(f"√144 = {math.sqrt(144)}")`,
-        task:"Glücksrad-Programm: Liste mit 8 Optionen (selbst wählen). random.choice() für Auswahl. Datum/Uhrzeit anzeigen. Wahrscheinlichkeit mit math berechnen (1/8 × 100%). Lass User 3x drehen.",
-        xp:30, tags:["random","datetime","math","import"]
-      },
-      {
-        id:"p7", num:19, title:"Profi-Schreibweise", sub:"List Comprehensions",
-        story:"⚡ Senior-Entwickler schreiben in einer Zeile was Anfänger fünf brauchen. List Comprehensions sind dein erster Schritt in die Profi-Liga.",
-        theory:`## List Comprehensions
-Normal (4 Zeilen):
-\`\`\`
-quadrate = []
-for x in range(10):
-    if x % 2 == 0:
-        quadrate.append(x**2)
-\`\`\`
-
-Kompakt (1 Zeile!):
-\`\`\`
-quadrate = [x**2 for x in range(10) if x % 2 == 0]
-\`\`\`
-
-Weitere Beispiele:
-\`\`\`
-gross = [w.upper() for w in ["hallo","welt"]]
-gerade = [x for x in range(20) if x % 2 == 0]
-\`\`\``,
-        example:`zahlen = [3, -1, 7, -5, 2, -8, 9]
-
-positive = [x for x in zahlen if x > 0]
-quadrate = [x**2 for x in zahlen if x > 0]
-
-namen = ["  alice  ", "BOB  ", "  Charlie"]
-sauber = [n.strip().title() for n in namen]
-
-print(f"Positiv: {positive}")
-print(f"Quadrate: {quadrate}")
-print(f"Namen: {sauber}")`,
-        task:"Konvertiere 4 Aufgaben zu List Comprehensions: (1) Alle durch 3 teilbare Zahlen 1-50, (2) Quadratzahlen von 1-10, (3) Wörter über 4 Zeichen aus 'der schnelle braune fuchs springt', (4) Celsius zu Fahrenheit für [0,20,37,100].",
-        xp:35, tags:["list comprehension","filter","kompakter Code"]
-      }
-    ],
-    finalTest:{
-      id:"pt", title:"Verschlüsselter Passwort-Manager",
-      desc:`Das ultimative Meisterstück!
-
-Dein Programm muss:
-✓ OOP: Klassen User und PasswortManager
-✓ JSON: daten.json beim Start laden (wenn vorhanden)
-✓ Registrierung & Login mit try/except abgesichert
-✓ Passwörter verschlüsselt speichern (simpler Algorithmus mit math/random)
-✓ Alles sauber mit OOP strukturiert
-
-Geprüft wird: Alles aus Teil 1, 2 und 3`,
-      xp:200, diff:"Profi"
-    }
-  }
-];
+  return (
+    <>
+      <button onClick={()=>setOpen(o=>!o)} className="hover-bright"
+        style={{position:"fixed",bottom:20,right:20,width:54,height:54,borderRadius:"50%",
+          background:"linear-gradient(135deg,#7c3aed,#6d28d9)",border:"none",color:"white",
+          fontSize:24,cursor:"pointer",zIndex:50,boxShadow:"0 6px 24px rgba(124,58,237,0.5)"}}
+        title="KI-Hilfe">
+        {open ? "✕" : "🤖"}
+      </button>
+      {open && (
+        <div className="anim-pop" style={{position:"fixed",bottom:84,right:20,left:"max(20px, calc(100vw - 420px))",
+          background:"#13132a",border:"1px solid #3d3d65",borderRadius:16,padding:16,zIndex:50,
+          boxShadow:"0 20px 60px rgba(0,0,0,0.7)",maxHeight:"60vh",overflowY:"auto"}}>
+          <div style={{color:"#a78bfa",fontWeight:700,fontSize:14,marginBottom:10}}>🤖 KI-Hilfe</div>
+          {!text && !loading && (
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {["Erkläre mir die Aufgabe nochmal einfacher","Welches Konzept brauche ich hier?","Ich verstehe die Fehlermeldung nicht","Gib mir einen kleinen Denkanstoß"].map(q => (
+                <button key={q} onClick={()=>ask(q)} className="hover-bright"
+                  style={{padding:"10px 12px",background:"#1c1c35",border:"1px solid #2d2d50",borderRadius:10,color:"#cbd5e0",fontSize:13,cursor:"pointer",textAlign:"left"}}>
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
+          {loading && <div style={{color:"#6b7280",fontSize:13,padding:"12px 0"}}><span className="spin">⏳</span> Denke nach...</div>}
+          {text && (
+            <>
+              <p style={{color:"#cbd5e0",fontSize:13,lineHeight:1.7,whiteSpace:"pre-wrap",margin:"0 0 10px"}}>{text}</p>
+              <button onClick={()=>setText("")} style={{padding:"8px 14px",background:"#1c1c35",border:"1px solid #2d2d50",borderRadius:8,color:"#a78bfa",fontSize:12,cursor:"pointer"}}>← andere Frage</button>
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
 
 /* ══════════════════════════════════════════════════════════════
    CODE EDITOR (Syntax-Highlighting Overlay, Tab-Support)
@@ -1048,16 +377,20 @@ function SetupScreen({ initKey, onDone }) {
 /* ══════════════════════════════════════════════════════════════
    HOME SCREEN
 ══════════════════════════════════════════════════════════════ */
-function HomeScreen({ user, challenge, onLesson, onChallenge, onTutor, onSettings }) {
+function HomeScreen({ user, challenge, onLesson, onChallenge, onTutor, onSettings, onPlayground }) {
   const lv = getLevel(user.xp);
   const done = new Set(user.completed);
   const totalL = COURSES.reduce((s,c)=>s+c.lessons.length,0);
   const doneL  = COURSES.reduce((s,c)=>s+c.lessons.filter(l=>done.has(l.id)).length,0);
   const challengeDone = challenge?.date === today() && challenge?.completed;
+  const [expanded, setExpanded] = useState(null); // Kurs-ID für "abgeschlossene anzeigen"
+
+  // Kurs i ist freigeschaltet, wenn alle Lektionen des vorherigen Kurses fertig sind
+  const courseUnlocked = i => i === 0 || COURSES[i-1].lessons.every(l => done.has(l.id));
 
   return (
     <div style={{minHeight:"100vh",background:"#07070f",fontFamily:"system-ui,-apple-system,sans-serif",paddingBottom:32}}>
-      <div style={{background:"#0f0f1e",borderBottom:"1px solid #1e1e3a",padding:"14px 16px",position:"sticky",top:0,zIndex:20}}>
+      <div style={{background:"#0f0f1ecc",backdropFilter:"blur(12px)",borderBottom:"1px solid #1e1e3a",padding:"14px 16px",position:"sticky",top:0,zIndex:20}}>
         <div style={{maxWidth:720,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <span style={{fontSize:26}}>🐍</span>
@@ -1075,13 +408,13 @@ function HomeScreen({ user, challenge, onLesson, onChallenge, onTutor, onSetting
               <div style={{color:"#a78bfa",fontWeight:700,fontSize:15}}>⚡ {user.xp}</div>
               <div style={{color:"#4b5563",fontSize:11}}>XP</div>
             </div>
-            <button onClick={onSettings} style={{background:"none",border:"none",color:"#4b5563",cursor:"pointer",fontSize:18,padding:4}}>⚙</button>
+            <button onClick={onSettings} className="hover-bright" style={{background:"none",border:"none",color:"#4b5563",cursor:"pointer",fontSize:18,padding:4}}>⚙</button>
           </div>
         </div>
       </div>
 
       <div style={{maxWidth:720,margin:"0 auto",padding:"20px 16px"}}>
-        <div style={{background:"#111120",borderRadius:14,padding:"18px 20px",marginBottom:16,border:"1px solid #2a2a50"}}>
+        <div className="anim-fadeUp" style={{background:"#111120",borderRadius:14,padding:"18px 20px",marginBottom:16,border:"1px solid #2a2a50"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
             <div style={{color:"#e2e8f0",fontWeight:700,fontSize:15}}>{lv.icon} {lv.name}</div>
             <div style={{color:"#6b7280",fontSize:13}}>{user.xp} / {lv.nextXP} XP</div>
@@ -1092,32 +425,44 @@ function HomeScreen({ user, challenge, onLesson, onChallenge, onTutor, onSetting
           <div style={{color:"#4b5563",fontSize:12,marginTop:8}}>{doneL} von {totalL} Lektionen · {challengeDone?"✅ Challenge heute gemacht":"⚡ Daily Challenge verfügbar"}</div>
         </div>
 
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:24}}>
-          <button onClick={onChallenge} style={{background:`linear-gradient(135deg,#1a1530,${challengeDone?"#111120":"#2d1b69"})`,border:`1px solid ${challengeDone?"#2a2a50":"#4c1d95"}`,borderRadius:14,padding:"16px 14px",cursor:"pointer",textAlign:"left"}}>
+        <div className="grid-2 anim-fadeUp" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12,animationDelay:"0.05s"}}>
+          <button onClick={onChallenge} className="hover-lift" style={{background:`linear-gradient(135deg,#1a1530,${challengeDone?"#111120":"#2d1b69"})`,border:`1px solid ${challengeDone?"#2a2a50":"#4c1d95"}`,borderRadius:14,padding:"16px 14px",cursor:"pointer",textAlign:"left"}}>
             <div style={{fontSize:26,marginBottom:6}}>{challengeDone?"✅":"⚡"}</div>
             <div style={{color:challengeDone?"#6b7280":"#a78bfa",fontWeight:700,fontSize:14}}>Daily Challenge</div>
             <div style={{color:"#4b5563",fontSize:12,marginTop:3}}>{challengeDone?"Heute erledigt!":"+50 XP heute"}</div>
           </button>
-          <button onClick={onTutor} style={{background:"linear-gradient(135deg,#0a1a2a,#0c2440)",border:"1px solid #1e3a5f",borderRadius:14,padding:"16px 14px",cursor:"pointer",textAlign:"left"}}>
+          <button onClick={onTutor} className="hover-lift" style={{background:"linear-gradient(135deg,#0a1a2a,#0c2440)",border:"1px solid #1e3a5f",borderRadius:14,padding:"16px 14px",cursor:"pointer",textAlign:"left"}}>
             <div style={{fontSize:26,marginBottom:6}}>🤖</div>
             <div style={{color:"#60a5fa",fontWeight:700,fontSize:14}}>AI Tutor</div>
             <div style={{color:"#4b5563",fontSize:12,marginTop:3}}>Frag mich alles!</div>
           </button>
         </div>
 
-        <div style={{color:"#e2e8f0",fontSize:17,fontWeight:700,marginBottom:14}}>Deine Kurse</div>
-        {COURSES.map(course => {
+        <button onClick={onPlayground} className="hover-lift anim-fadeUp" style={{display:"flex",alignItems:"center",gap:14,width:"100%",background:"linear-gradient(135deg,#0a1f14,#0e3320)",border:"1px solid #166534",borderRadius:14,padding:"16px 18px",cursor:"pointer",textAlign:"left",marginBottom:24,animationDelay:"0.1s",boxSizing:"border-box"}}>
+          <div style={{fontSize:32}}>🧪</div>
+          <div style={{flex:1}}>
+            <div style={{color:"#4ade80",fontWeight:700,fontSize:15}}>Python Playground</div>
+            <div style={{color:"#4b5563",fontSize:12,marginTop:2}}>Echtes Python im Browser · KI-Assistent · Code teilen</div>
+          </div>
+          <div style={{color:"#4ade80",fontSize:20}}>→</div>
+        </button>
+
+        <div style={{color:"#e2e8f0",fontSize:17,fontWeight:700,marginBottom:14}}>Dein Lernpfad</div>
+        {COURSES.map((course, ci) => {
           const cDone = course.lessons.filter(l=>done.has(l.id)).length;
           const pct = (cDone / course.lessons.length) * 100;
+          const cUnlocked = courseUnlocked(ci);
+          const showAll = expanded === course.id;
+          const diffLabel = ci === 0 ? "Easy" : ci === 1 ? "Mittel" : "Fortgeschritten";
           return (
-            <div key={course.id} style={{background:"#111120",borderRadius:16,marginBottom:14,border:`1px solid ${course.border}55`,overflow:"hidden"}}>
+            <div key={course.id} className="anim-fadeUp" style={{background:"#111120",borderRadius:16,marginBottom:14,border:`1px solid ${course.border}55`,overflow:"hidden",opacity:cUnlocked?1:0.55,animationDelay:`${0.1 + ci*0.07}s`}}>
               <div style={{padding:"16px 20px",borderBottom:"1px solid #1a1a30"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
                   <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <span style={{fontSize:20}}>{course.emoji}</span>
+                    <span style={{fontSize:20}}>{cUnlocked ? course.emoji : "🔒"}</span>
                     <div>
-                      <div style={{color:"#e2e8f0",fontWeight:700,fontSize:15}}>{course.title}</div>
-                      <div style={{color:"#4b5563",fontSize:12}}>{course.subtitle}</div>
+                      <div style={{color:"#e2e8f0",fontWeight:700,fontSize:15}}>{course.title} <span style={{color:course.color,fontSize:11,fontWeight:700,marginLeft:4,background:course.bg,padding:"2px 8px",borderRadius:10,border:`1px solid ${course.border}66`}}>{diffLabel}</span></div>
+                      <div style={{color:"#4b5563",fontSize:12}}>{cUnlocked ? course.subtitle : "Schließe erst den vorherigen Kurs ab"}</div>
                     </div>
                   </div>
                   <div style={{color:course.color,fontSize:13,fontWeight:700,background:course.bg,padding:"3px 10px",borderRadius:20}}>{cDone}/{course.lessons.length}</div>
@@ -1127,34 +472,74 @@ function HomeScreen({ user, challenge, onLesson, onChallenge, onTutor, onSetting
                 </div>
               </div>
               <div style={{padding:"12px 16px"}}>
+                {(() => {
+                  const doneCount = course.lessons.filter(l=>done.has(l.id)).length;
+                  return (
+                    <>
+                      {doneCount > 0 && !showAll && (
+                        <button onClick={()=>setExpanded(course.id)} style={{display:"block",width:"100%",padding:"8px 10px",marginBottom:6,background:"transparent",border:"1px dashed #2d2d50",borderRadius:10,color:"#4b5563",fontSize:12,cursor:"pointer"}}>
+                          ✓ {doneCount} abgeschlossene Lektion{doneCount>1?"en":""} anzeigen
+                        </button>
+                      )}
+                      {showAll && doneCount > 0 && (
+                        <button onClick={()=>setExpanded(null)} style={{display:"block",width:"100%",padding:"8px 10px",marginBottom:6,background:"transparent",border:"1px dashed #2d2d50",borderRadius:10,color:"#4b5563",fontSize:12,cursor:"pointer"}}>
+                          Abgeschlossene wieder einklappen ▲
+                        </button>
+                      )}
+                    </>
+                  );
+                })()}
                 {course.lessons.map((lesson, idx) => {
                   const isDone = done.has(lesson.id);
-                  const isNext = !isDone && course.lessons.slice(0, idx).every(l=>done.has(l.id));
+                  const lUnlocked = cUnlocked && course.lessons.slice(0, idx).every(l=>done.has(l.id));
+                  const isCurrent = !isDone && lUnlocked;
+                  if (isDone && !showAll) return null; // Abgeschlossene standardmäßig eingeklappt
                   return (
-                    <button key={lesson.id} onClick={()=>onLesson(course, lesson)}
-                      style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"9px 10px",borderRadius:10,marginBottom:3,background:isNext?"#1e1e3a":"transparent",border:isNext?"1px solid #3d3d65":"1px solid transparent",cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
-                      <div style={{width:26,height:26,borderRadius:"50%",background:isDone?course.color:"#1c1c35",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:12,color:isDone?"#fff":"#6b7280",fontWeight:700}}>
-                        {isDone ? "✓" : lesson.num}
+                    <button key={lesson.id}
+                      onClick={()=> (isDone || isCurrent) && onLesson(course, lesson)}
+                      disabled={!isDone && !isCurrent}
+                      className={isCurrent ? "pulse-current" : ""}
+                      style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:isCurrent?"12px 12px":"9px 10px",borderRadius:10,marginBottom:3,
+                        background:isCurrent?"linear-gradient(135deg,#1e1e3a,#251a45)":"transparent",
+                        border:isCurrent?"1px solid #7c3aed88":"1px solid transparent",
+                        cursor:(isDone||isCurrent)?"pointer":"default",textAlign:"left",transition:"all 0.15s",
+                        opacity:(!isDone && !isCurrent)?0.4:1}}>
+                      <div style={{width:isCurrent?30:26,height:isCurrent?30:26,borderRadius:"50%",background:isDone?course.color:isCurrent?"#7c3aed":"#1c1c35",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:12,color:(isDone||isCurrent)?"#fff":"#4b5563",fontWeight:700,transition:"all 0.2s"}}>
+                        {isDone ? "✓" : isCurrent ? "▶" : "🔒"}
                       </div>
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{color:isDone?"#6b7280":"#e2e8f0",fontSize:14,fontWeight:isDone?400:600}}>{lesson.title}</div>
+                        <div style={{color:isDone?"#6b7280":isCurrent?"#fff":"#6b7280",fontSize:14,fontWeight:isCurrent?700:isDone?400:500}}>
+                          {isCurrent && <span style={{color:"#a78bfa",fontSize:10,fontWeight:800,letterSpacing:1,display:"block",marginBottom:2}}>JETZT DRAN</span>}
+                          {lesson.num}. {lesson.title}
+                        </div>
                         <div style={{color:"#374151",fontSize:12}}>{lesson.sub}</div>
                       </div>
-                      <div style={{color:"#f59e0b",fontSize:12,fontWeight:700,flexShrink:0}}>+{lesson.xp}XP</div>
+                      <div style={{color:isCurrent?"#f59e0b":"#4b5563",fontSize:12,fontWeight:700,flexShrink:0}}>+{lesson.xp}XP</div>
                     </button>
                   );
                 })}
-                <button onClick={()=>onLesson(course, {...course.finalTest, isTest:true})}
-                  style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"9px 10px",borderRadius:10,marginTop:6,background:done.has(course.finalTest.id)?"transparent":"#150e25",border:`1px solid ${done.has(course.finalTest.id)?"#2a2a50":course.color+"44"}`,cursor:"pointer",textAlign:"left"}}>
-                  <div style={{width:26,height:26,borderRadius:"50%",background:done.has(course.finalTest.id)?course.color:"#2d1b69",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:12}}>
-                    {done.has(course.finalTest.id) ? "✓" : "🏆"}
-                  </div>
-                  <div style={{flex:1}}>
-                    <div style={{color:"#e2e8f0",fontSize:14,fontWeight:600}}>{course.finalTest.title}</div>
-                    <div style={{color:"#4b5563",fontSize:12}}>Abschlusstest · {course.finalTest.diff}</div>
-                  </div>
-                  <div style={{color:"#f59e0b",fontSize:12,fontWeight:700,flexShrink:0}}>+{course.finalTest.xp}XP</div>
-                </button>
+                {(() => {
+                  const testUnlocked = cUnlocked && course.lessons.every(l=>done.has(l.id));
+                  const testDone = done.has(course.finalTest.id);
+                  return (
+                    <button onClick={()=> testUnlocked && onLesson(course, {...course.finalTest, isTest:true})}
+                      disabled={!testUnlocked}
+                      className={testUnlocked && !testDone ? "pulse-current" : ""}
+                      style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"9px 10px",borderRadius:10,marginTop:6,
+                        background:testDone?"transparent":testUnlocked?"#150e25":"transparent",
+                        border:`1px solid ${testDone?"#2a2a50":testUnlocked?course.color+"66":"transparent"}`,
+                        cursor:testUnlocked?"pointer":"default",textAlign:"left",opacity:testUnlocked||testDone?1:0.4}}>
+                      <div style={{width:26,height:26,borderRadius:"50%",background:testDone?course.color:"#2d1b69",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:12}}>
+                        {testDone ? "✓" : testUnlocked ? "🏆" : "🔒"}
+                      </div>
+                      <div style={{flex:1}}>
+                        <div style={{color:"#e2e8f0",fontSize:14,fontWeight:600}}>{course.finalTest.title}</div>
+                        <div style={{color:"#4b5563",fontSize:12}}>Abschlusstest · {course.finalTest.diff}{!testUnlocked && " · erst alle Lektionen abschließen"}</div>
+                      </div>
+                      <div style={{color:"#f59e0b",fontSize:12,fontWeight:700,flexShrink:0}}>+{course.finalTest.xp}XP</div>
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           );
@@ -1167,7 +552,7 @@ function HomeScreen({ user, challenge, onLesson, onChallenge, onTutor, onSetting
 /* ══════════════════════════════════════════════════════════════
    LESSON SCREEN
 ══════════════════════════════════════════════════════════════ */
-function LessonScreen({ lesson, course, user, apiKey, onBack, onComplete }) {
+function LessonScreen({ lesson, course, user, apiKey, onBack, onComplete, onNext, onSkip }) {
   const isTest = !!lesson.isTest;
   const [tab, setTab] = useState(isTest ? "code" : "story");
   const [code, setCode] = useState("# Dein Code hier\n\n");
@@ -1175,6 +560,8 @@ function LessonScreen({ lesson, course, user, apiKey, onBack, onComplete }) {
   const [loading, setLoading] = useState(false);
   const [xpAnim, setXpAnim] = useState(false);
   const alreadyDone = user.completed.includes(lesson.id);
+  const py = usePyRunner();
+  const [passedNow, setPassedNow] = useState(false);
 
   const checkCode = async (hint = false) => {
     if (!code.trim() || code.trim() === "# Dein Code hier") {
@@ -1214,6 +601,7 @@ PROFI-TIPP: [Ein optionaler kurzer Tipp für besseren Code]`;
         const fb = resp.match(/FEEDBACK:\s*([\s\S]*?)(?:PROFI-TIPP:|$)/i)?.[1]?.trim() || resp;
         const tip = resp.match(/PROFI-TIPP:\s*([\s\S]*?)$/i)?.[1]?.trim();
         setResult({type: passed ? "success" : "fail", text: fb, tip});
+        if (passed) setPassedNow(true);
         if (passed && !alreadyDone) {
           setXpAnim(true);
           onComplete(lesson.id, lesson.xp);
@@ -1315,21 +703,26 @@ PROFI-TIPP: [Ein optionaler kurzer Tipp für besseren Code]`;
                 <span style={{color:"#374151",fontSize:11}}>Tab = 4 Leerzeichen</span>
               </div>
               <CodeEditor value={code} onChange={setCode} height={300} />
+              <OutputConsole output={py.out} error={py.err} running={py.running} status={py.status} onClear={py.clear} />
             </div>
 
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-              <button onClick={()=>checkCode(true)} disabled={loading}
+            <div className="grid-2" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
+              <button onClick={()=>py.run(code)} disabled={py.running} className="hover-bright"
+                style={{padding:12,background:py.running?"#1c1c35":"linear-gradient(135deg,#166534,#15803d)",border:"none",borderRadius:10,color:"white",fontSize:14,fontWeight:700,cursor:py.running?"not-allowed":"pointer"}}>
+                {py.running ? "⏳ Läuft..." : "▶ Ausführen"}
+              </button>
+              <button onClick={()=>checkCode(true)} disabled={loading} className="hover-bright"
                 style={{padding:12,background:"#1c1c35",border:"1px solid #3d3d65",borderRadius:10,color:"#a78bfa",fontSize:14,fontWeight:600,cursor:loading?"not-allowed":"pointer"}}>
                 💡 Hinweis
               </button>
-              <button onClick={()=>checkCode(false)} disabled={loading}
+              <button onClick={()=>checkCode(false)} disabled={loading} className="hover-bright"
                 style={{padding:12,background:loading?"#4b3b6b":"linear-gradient(135deg,#7c3aed,#6d28d9)",border:"none",borderRadius:10,color:"white",fontSize:14,fontWeight:700,cursor:loading?"not-allowed":"pointer"}}>
-                {loading ? "⏳ Prüfe Code..." : "✓ Code prüfen"}
+                {loading ? "⏳ Prüfe..." : "✓ Abgeben"}
               </button>
             </div>
 
             {result && (
-              <div style={{background:result.type==="success"?"#071209":result.type==="hint"?"#0d0b1a":"#120505",border:`1px solid ${result.type==="success"?"#22c55e55":result.type==="hint"?"#7c3aed55":"#ef444455"}`,borderRadius:12,padding:"16px 18px"}}>
+              <div className="anim-fadeUp" style={{background:result.type==="success"?"#071209":result.type==="hint"?"#0d0b1a":"#120505",border:`1px solid ${result.type==="success"?"#22c55e55":result.type==="hint"?"#7c3aed55":"#ef444455"}`,borderRadius:12,padding:"16px 18px"}}>
                 <div style={{fontWeight:700,marginBottom:8,color:result.type==="success"?"#22c55e":result.type==="hint"?"#a78bfa":"#ef4444",fontSize:14}}>
                   {result.type==="success"?"✅ Bestanden!":result.type==="fail"?"❌ Noch nicht ganz...":result.type==="hint"?"💡 Hinweis für dich":"⚠️ Fehler"}
                 </div>
@@ -1337,9 +730,23 @@ PROFI-TIPP: [Ein optionaler kurzer Tipp für besseren Code]`;
                 {result.tip && <p style={{color:"#6b7280",fontSize:13,margin:"10px 0 0",fontStyle:"italic",borderTop:"1px solid #2a2a50",paddingTop:10}}>⚡ Profi-Tipp: {result.tip}</p>}
               </div>
             )}
+
+            {(passedNow || alreadyDone) && onNext && (
+              <button onClick={onNext} className="hover-bright anim-pop"
+                style={{width:"100%",marginTop:14,padding:14,background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:12,color:"white",fontSize:15,fontWeight:700,cursor:"pointer"}}>
+                Nächste Lektion →
+              </button>
+            )}
+            {!passedNow && !alreadyDone && !isTest && onSkip && (
+              <button onClick={onSkip}
+                style={{width:"100%",marginTop:10,padding:10,background:"transparent",border:"1px dashed #2d2d50",borderRadius:10,color:"#4b5563",fontSize:13,cursor:"pointer"}}>
+                Lektion überspringen (ohne XP) ⏭
+              </button>
+            )}
           </div>
         )}
       </div>
+      <HelpFab apiKey={apiKey} context={`Der Schüler arbeitet an der Python-Lektion "${lesson.title}" (${lesson.sub||"Abschlusstest"}).\nAufgabe: ${lesson.task||lesson.desc}`} />
     </div>
   );
 }
@@ -1355,6 +762,7 @@ function ChallengeScreen({ user, apiKey, challenge, onSaveChallenge, onBack, onX
   const [loading, setLoading] = useState(false);
   const [genLoading, setGenLoading] = useState(false);
   const alreadyDone = ch?.completed;
+  const py = usePyRunner();
 
   const gen = async () => {
     setGenLoading(true);
@@ -1437,10 +845,17 @@ Bewerte kurz: Erste Zeile EXAKT "BESTANDEN" oder "NICHT BESTANDEN", danach 1-2 S
               {ch.hint && <div style={{marginTop:12,padding:"10px 14px",background:"#1e1530",borderRadius:8,color:"#8b5cf6",fontSize:13}}>💡 {ch.hint}</div>}
             </div>
             <CodeEditor value={code} onChange={setCode} height={260} />
-            <button onClick={submit} disabled={loading||alreadyDone}
-              style={{width:"100%",marginTop:12,padding:13,background:alreadyDone?"#1c1c35":loading?"#4b3b6b":"linear-gradient(135deg,#7c3aed,#6d28d9)",border:"none",borderRadius:12,color:alreadyDone?"#6b7280":"white",fontSize:15,fontWeight:700,cursor:alreadyDone?"not-allowed":"pointer"}}>
-              {alreadyDone ? "✅ Heute bereits gelöst!" : loading ? "Prüfe..." : "Einreichen ⚡"}
-            </button>
+            <OutputConsole output={py.out} error={py.err} running={py.running} status={py.status} onClear={py.clear} />
+            <div className="grid-2" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:12}}>
+              <button onClick={()=>py.run(code)} disabled={py.running} className="hover-bright"
+                style={{padding:13,background:py.running?"#1c1c35":"linear-gradient(135deg,#166534,#15803d)",border:"none",borderRadius:12,color:"white",fontSize:15,fontWeight:700,cursor:py.running?"not-allowed":"pointer"}}>
+                {py.running ? "⏳ Läuft..." : "▶ Ausführen"}
+              </button>
+              <button onClick={submit} disabled={loading||alreadyDone} className="hover-bright"
+                style={{padding:13,background:alreadyDone?"#1c1c35":loading?"#4b3b6b":"linear-gradient(135deg,#7c3aed,#6d28d9)",border:"none",borderRadius:12,color:alreadyDone?"#6b7280":"white",fontSize:15,fontWeight:700,cursor:alreadyDone?"not-allowed":"pointer"}}>
+                {alreadyDone ? "✅ Gelöst!" : loading ? "Prüfe..." : "Einreichen ⚡"}
+              </button>
+            </div>
             {result && (
               <div style={{marginTop:12,background:result.passed?"#071209":"#120505",border:`1px solid ${result.passed?"#22c55e55":"#ef444455"}`,borderRadius:12,padding:"16px 18px"}}>
                 <div style={{color:result.passed?"#22c55e":"#ef4444",fontWeight:700,marginBottom:8}}>{result.passed?"🎉 Challenge gelöst! +50 XP":"Weiter versuchen..."}</div>
@@ -1627,11 +1042,183 @@ function SettingsScreen({ user, onBack, onReset, onUpdateKey }) {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   PYTHON PLAYGROUND — echtes Python, KI-Assistent, Code teilen
+══════════════════════════════════════════════════════════════ */
+const PG_KEY = "pylearn_playground_v1";
+const PG_DEFAULT = `# 🧪 Willkommen im Python Playground!
+# Hier läuft ECHTES Python direkt in deinem Browser.
+# Schreib was du willst und drück ▶ Ausführen.
+
+name = input("Wie heißt du? ")
+print(f"Hallo {name}! 🐍")
+
+for i in range(3):
+    print("Python ist", "super " * (i + 1))
+`;
+
+const b64encode = s => btoa(unescape(encodeURIComponent(s))).replace(/\+/g,"-").replace(/\//g,"_");
+const b64decode = s => decodeURIComponent(escape(atob(s.replace(/-/g,"+").replace(/_/g,"/"))));
+
+/* Zerlegt KI-Antworten in Text- und Code-Segmente */
+function splitCodeBlocks(text) {
+  const parts = [];
+  const re = /```(?:python|py)?\n?([\s\S]*?)```/g;
+  let last = 0, m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push({ type:"text", value:text.slice(last, m.index).trim() });
+    parts.push({ type:"code", value:m[1].replace(/\n$/,"") });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push({ type:"text", value:text.slice(last).trim() });
+  return parts.filter(p => p.value);
+}
+
+function PlaygroundScreen({ user, apiKey, onBack }) {
+  const [code, setCode] = useState(() => {
+    try {
+      const m = window.location.hash.match(/pg=([A-Za-z0-9_=-]+)/);
+      if (m) return b64decode(m[1]);
+    } catch {}
+    try { const s = localStorage.getItem(PG_KEY); if (s) return s; } catch {}
+    return PG_DEFAULT;
+  });
+  const py = usePyRunner();
+  const [shareMsg, setShareMsg] = useState("");
+  const [msgs, setMsgs] = useState([{ role:"ai", text:`Hi ${user.name}! 🧪 Ich bin dein Playground-Assistent.\n\nSag mir was du bauen willst – ich schreibe dir kompletten Python-Code, den du direkt in den Editor übernehmen kannst. Oder frag mich zu deinem aktuellen Code!` }]);
+  const [input, setInput] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const bottomRef = useRef(null);
+
+  useEffect(() => { try { localStorage.setItem(PG_KEY, code); } catch {} }, [code]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior:"smooth" }); }, [msgs, aiLoading]);
+
+  const share = async () => {
+    const url = `${window.location.origin}${window.location.pathname}#pg=${b64encode(code)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareMsg("✅ Link kopiert!");
+    } catch {
+      window.prompt("Link zum Teilen kopieren:", url);
+      setShareMsg("Link erstellt");
+    }
+    setTimeout(()=>setShareMsg(""), 2500);
+  };
+
+  const send = async () => {
+    const txt = input.trim(); if (!txt || aiLoading) return;
+    setInput(""); setMsgs(p=>[...p, { role:"user", text:txt }]); setAiLoading(true);
+    try {
+      const sys = `Du bist ein Python-Coding-Assistent in einem Browser-Playground. Der Nutzer heißt ${user.name}.
+Regeln:
+- Du DARFST und SOLLST kompletten, lauffähigen Python-Code schreiben wenn der Nutzer etwas bauen will
+- Code IMMER in \`\`\`python Blöcken
+- Der Code läuft via Pyodide im Browser: print() und input() funktionieren, KEINE Datei-/Netzwerkzugriffe, keine pip-Pakete außer Standard-Library
+- Erkläre kurz was der Code macht (max 3 Sätze)
+- Antworte auf Deutsch`;
+      const history = msgs.slice(-8).map(m=>`${m.role==="user"?"Nutzer":"Assistent"}: ${m.text}`).join("\n\n");
+      const resp = await callAI(apiKey, `${history}\n\nAktueller Code im Editor:\n\`\`\`python\n${code}\n\`\`\`\n\nNutzer: ${txt}`, sys);
+      setMsgs(p=>[...p, { role:"ai", text:resp }]);
+    } catch (e) {
+      setMsgs(p=>[...p, { role:"ai", text:`Fehler: ${e.message}` }]);
+    } finally { setAiLoading(false); }
+  };
+
+  return (
+    <div style={{minHeight:"100vh",background:"#07070f",fontFamily:"system-ui,-apple-system,sans-serif",display:"flex",flexDirection:"column"}}>
+      <div style={{background:"#0f0f1e",borderBottom:"1px solid #1e1e3a",padding:"12px 16px",flexShrink:0}}>
+        <div style={{maxWidth:1200,margin:"0 auto",display:"flex",alignItems:"center",gap:10}}>
+          <button onClick={onBack} style={{background:"none",border:"none",color:"#6b7280",cursor:"pointer",fontSize:22,padding:"0 8px 0 0"}}>←</button>
+          <div style={{flex:1}}>
+            <div style={{color:"#4ade80",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:0.5}}>Playground</div>
+            <div style={{color:"#e2e8f0",fontSize:16,fontWeight:700}}>🧪 Python Playground</div>
+          </div>
+          {shareMsg && <span className="anim-pop" style={{color:"#4ade80",fontSize:13,fontWeight:600}}>{shareMsg}</span>}
+          <button onClick={share} className="hover-bright"
+            style={{padding:"9px 16px",background:"#1c1c35",border:"1px solid #3d3d65",borderRadius:10,color:"#a78bfa",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+            🔗 Teilen
+          </button>
+        </div>
+      </div>
+
+      <div className="pg-layout" style={{flex:1,display:"flex",gap:14,maxWidth:1200,width:"100%",margin:"0 auto",padding:16,boxSizing:"border-box",alignItems:"stretch"}}>
+        {/* Editor + Konsole */}
+        <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <span style={{color:"#4b5563",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:0.5}}>Editor</span>
+            <button onClick={()=>setCode(PG_DEFAULT)} style={{background:"none",border:"none",color:"#4b5563",fontSize:11,cursor:"pointer"}}>↺ zurücksetzen</button>
+          </div>
+          <CodeEditor value={code} onChange={setCode} height={380} />
+          <button onClick={()=>py.run(code)} disabled={py.running} className="hover-bright"
+            style={{marginTop:12,padding:13,background:py.running?"#1c1c35":"linear-gradient(135deg,#166534,#15803d)",border:"none",borderRadius:12,color:"white",fontSize:15,fontWeight:700,cursor:py.running?"not-allowed":"pointer"}}>
+            {py.running ? <><span className="spin">⏳</span> {py.status || "Läuft..."}</> : "▶ Ausführen"}
+          </button>
+          <OutputConsole output={py.out} error={py.err} running={py.running} status={py.status} onClear={py.clear} />
+        </div>
+
+        {/* KI-Chat */}
+        <div className="pg-chat" style={{width:360,maxWidth:"40%",flexShrink:0,display:"flex",flexDirection:"column",background:"#0d0d1c",border:"1px solid #1e1e3a",borderRadius:14,overflow:"hidden"}}>
+          <div style={{padding:"10px 14px",borderBottom:"1px solid #1e1e3a",color:"#a78bfa",fontWeight:700,fontSize:13,flexShrink:0}}>🤖 KI-Assistent</div>
+          <div style={{flex:1,overflowY:"auto",padding:12,minHeight:200,maxHeight:460}}>
+            {msgs.map((m, i) => (
+              <div key={i} className="anim-fadeIn" style={{marginBottom:12}}>
+                {m.role === "user" ? (
+                  <div style={{background:"#7c3aed",borderRadius:12,borderBottomRightRadius:4,padding:"9px 12px",color:"#fff",fontSize:13,lineHeight:1.6,marginLeft:30,whiteSpace:"pre-wrap",overflowWrap:"break-word"}}>{m.text}</div>
+                ) : (
+                  <div style={{marginRight:14}}>
+                    {splitCodeBlocks(m.text).map((seg, si) => seg.type === "text" ? (
+                      <div key={si} style={{background:"#1c1c35",borderRadius:12,borderBottomLeftRadius:4,padding:"9px 12px",color:"#cbd5e0",fontSize:13,lineHeight:1.6,marginBottom:6,whiteSpace:"pre-wrap",overflowWrap:"break-word"}}>{seg.value}</div>
+                    ) : (
+                      <div key={si} style={{marginBottom:6,border:"1px solid #2d2d50",borderRadius:10,overflow:"hidden"}}>
+                        <pre style={{margin:0,padding:"10px 12px",background:"#0a0a18",fontSize:12,lineHeight:1.55,fontFamily:"'Fira Code',Consolas,monospace",color:"#d4d4d4",overflowX:"auto"}}
+                          dangerouslySetInnerHTML={{__html: pyHL(seg.value)}} />
+                        <button onClick={()=>setCode(seg.value)} className="hover-bright"
+                          style={{display:"block",width:"100%",padding:"7px 10px",background:"#15803d",border:"none",color:"white",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                          ⤵ In Editor übernehmen
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            {aiLoading && <div style={{color:"#6b7280",fontSize:13}}><span className="spin">⏳</span> schreibt...</div>}
+            <div ref={bottomRef} />
+          </div>
+          <div style={{padding:10,borderTop:"1px solid #1e1e3a",display:"flex",gap:8,flexShrink:0}}>
+            <input value={input} onChange={e=>setInput(e.target.value)}
+              onKeyDown={e=>{ if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+              placeholder="Was soll ich bauen?"
+              style={{flex:1,padding:"10px 12px",background:"#1c1c35",border:"1px solid #2a2a50",borderRadius:10,color:"#e2e8f0",fontSize:13,outline:"none",minWidth:0}} />
+            <button onClick={send} disabled={aiLoading||!input.trim()} className="hover-bright"
+              style={{padding:"10px 14px",background:input.trim()&&!aiLoading?"#7c3aed":"#1c1c35",border:"none",borderRadius:10,color:input.trim()&&!aiLoading?"white":"#4b5563",cursor:"pointer",fontWeight:700,fontSize:14}}>→</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
    MAIN APP
 ══════════════════════════════════════════════════════════════ */
+/* Nächste Lektion im Lernpfad finden (innerhalb Kurs → Abschlusstest → nächster Kurs) */
+function findNextLesson(course, lesson) {
+  const ci = COURSES.findIndex(c => c.id === course.id);
+  if (ci === -1) return null;
+  if (lesson.isTest) {
+    const next = COURSES[ci + 1];
+    return next ? { course: next, lesson: next.lessons[0] } : null;
+  }
+  const li = COURSES[ci].lessons.findIndex(l => l.id === lesson.id);
+  if (li < COURSES[ci].lessons.length - 1) {
+    return { course: COURSES[ci], lesson: COURSES[ci].lessons[li + 1] };
+  }
+  return { course: COURSES[ci], lesson: { ...COURSES[ci].finalTest, isTest: true } };
+}
+
 export default function App() {
   const [data, setData] = useState(null);          // null = lädt noch
-  const [view, setView] = useState("home");
+  const [view, setView] = useState(() => window.location.hash.includes("pg=") ? "playground" : "home");
   const [selLesson, setSelLesson] = useState(null);
   const [selCourse, setSelCourse] = useState(null);
 
@@ -1706,9 +1293,21 @@ export default function App() {
       onBack={()=>setView("home")} onXP={addXP} />;
   }
 
+  if (view === "playground") {
+    return <PlaygroundScreen user={user} apiKey={data.apiKey} onBack={()=>setView("home")} />;
+  }
+
   if (view === "lesson" && selLesson && selCourse) {
-    return <LessonScreen lesson={selLesson} course={selCourse} user={user} apiKey={data.apiKey}
-      onBack={()=>setView("home")} onComplete={completeLesson} />;
+    const next = findNextLesson(selCourse, selLesson);
+    const goNext = next ? () => { setSelCourse(next.course); setSelLesson(next.lesson); } : null;
+    return <LessonScreen key={selLesson.id} lesson={selLesson} course={selCourse} user={user} apiKey={data.apiKey}
+      onBack={()=>setView("home")} onComplete={completeLesson}
+      onNext={goNext}
+      onSkip={() => {
+        // Überspringen: als erledigt markieren, aber ohne XP
+        update({ completed: [...new Set([...(data.completed||[]), selLesson.id])] });
+        if (goNext) goNext(); else setView("home");
+      }} />;
   }
 
   return (
@@ -1716,8 +1315,9 @@ export default function App() {
       onLesson={(course, lesson)=>{setSelCourse(course); setSelLesson(lesson); setView("lesson");}}
       onChallenge={()=>setView("challenge")}
       onTutor={()=>setView("tutor")}
+      onPlayground={()=>setView("playground")}
       onSettings={()=>setView("settings")} />
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")).render(<><GlobalStyle /><App /></>);
