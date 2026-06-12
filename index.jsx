@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import ReactDOM from "react-dom/client";
 
 /* ══════════════════════════════════════════════════════════════
    GEMINI API (Google AI Studio) — mit Modell-Fallback
@@ -1718,3 +1719,5 @@ export default function App() {
       onSettings={()=>setView("settings")} />
   );
 }
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
