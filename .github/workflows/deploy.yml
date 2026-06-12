@@ -1,0 +1,69 @@
+name: Deploy Python Learn AI to GitHub Pages
+
+on:
+  push:
+    branches: ["main"] # Führt den Build aus, wenn du Code hochlädst
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/tools/node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      # WICHTIG: Dieser Schritt fixt das 'window.storage' Problem automatisch für den Build!
+      - name: Fix window.storage for standard browsers
+        run: |
+          sed -i 's/window.storage/window.localStorage/g' src/App.jsx || sed -i 's/window.storage/window.localStorage/g' index.jsx || true
+
+      - name: Install Dependencies
+        run: |
+          if [ -f package.json ]; then
+            npm ci || npm install
+          else
+            # Falls du noch keine package.json hast, erstellen wir eine minimale für React + Vite
+            echo "Erstelle automatische Build-Umgebung..."
+            npm init -y
+            npm install react react-dom vite @vitejs/plugin-react
+          fi
+
+      - name: Build App
+        run: |
+          # Prüft, ob ein Build-Script existiert, andernfalls wird direkt mit Vite gebaut
+          if grep -q "build" package.json; then
+            npm run build
+          else
+            npx vite build --base=./
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Erkennt automatisch, ob Vite (dist) oder Create React App (build) genutzt wurde
+          path: |
+            ./dist
+            ./build
+            ./
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
